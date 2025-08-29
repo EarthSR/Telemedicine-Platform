@@ -11,38 +11,31 @@ jobs:
     defaults:
       run:
         shell: bash
-
-    # แมป secrets -> env เพื่อใช้ตรวจใน if: (VS Code จะไม่ฟ้อง)
     env:
       DOCKERHUB_USERNAME_ENV: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN_ENV: ${{ secrets.DOCKERHUB_TOKEN }}
 
     steps:
-      # 1) Checkout source code
       - name: 1) Checkout
         uses: actions/checkout@v4
 
-      # 2) Setup Node
       - name: 2) Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
-      # 2.1) API tests
       - name: 2.1) API tests
         run: |
           npm ci || true
           npm test --if-present
 
-      # 2.2) Web build check
       - name: 2.2) Web build check
         working-directory: telemed-web
         run: |
           npm ci || true
           npm run build --if-present
 
-      # 3) (Optional) Docker Hub login – เช็ค env ที่มาจาก secrets
-      - name: 3) Docker Hub login
+      - name: 3) Docker Hub login (optional)
         if: ${{ env.DOCKERHUB_USERNAME_ENV != '' && env.DOCKERHUB_TOKEN_ENV != '' }}
         uses: docker/login-action@v3
         with:
@@ -50,37 +43,36 @@ jobs:
           username: ${{ env.DOCKERHUB_USERNAME_ENV }}
           password: ${{ env.DOCKERHUB_TOKEN_ENV }}
 
-      # 4) Write .env from Secrets
-      - name: 4) Write .env from Secrets
+      - name: 4) Write .env from Secrets (normalize)
         run: |
           set -e
           printf "%s" "${{ secrets.ENV_FILE }}" > .env
+          # ลบช่องว่างรอบ '=' และตัด CRLF กันพิมพ์ผิด
+          sed -i -E 's/^[[:space:]]+//; s/[[:space:]]*=[[:space:]]*/=/' .env || true
+          sed -i 's/\r$//' .env || true
+          # ถ้าไม่มี PORT ให้ตั้ง default
+          grep -q '^PORT=' .env || echo 'PORT=4005' >> .env
           awk -F= '/^[A-Za-z0-9_]+=/ {print "ENV KEY:", $1}' .env
 
-      # 5) Deploy with Docker Compose 
-      - name: 5) docker compose build & up
+      - name: 5) docker compose build & up (wait)
         run: |
           set -e
-          ls -la .
-          test -f .env
-          test -f docker-compose.yml
           docker compose --env-file .env build --pull
-          docker compose --env-file .env up -d --remove-orphans
-          docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"
+          docker compose --env-file .env up -d --remove-orphans --wait --wait-timeout 180
+          docker compose ps
 
-      # 6) Healthchecks
-      - name: 6.1) Healthcheck API
+      - name: 6.1) Healthcheck API (/api/health)
         run: |
           set -e
-          code=$(curl -s -o /tmp/api_health.json -w "%{http_code}" http://127.0.0.1/api/health || true)
-          echo "API HTTP $code"
-          cat /tmp/api_health.json 2>/dev/null || true
-          if [[ "$code" != "200" ]]; then
-            echo "API unhealthy"
-            exit 1
-          fi
+          for i in {1..10}; do
+            code=$(curl --noproxy '*' -s -o /dev/null -w "%{http_code}" http://127.0.0.1/api/health || true)
+            echo "API HTTP $code (try $i/10)"
+            [ "$code" = "200" ] && exit 0
+            sleep 3
+          done
+          echo "API unhealthy"; exit 1
 
-      - name: 6.2) Healthcheck Web
+      - name: 6.2) Healthcheck Web (/)
         run: |
           set -e
           code=$(curl -sI -o /dev/null -w "%{http_code}" http://127.0.0.1/ || true)
