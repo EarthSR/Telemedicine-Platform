@@ -1,4 +1,4 @@
-// src/pages/Patient/Home.jsx
+// src/pages/Patient/Home.jsx - Comprehensive Telemedicine Landing Page
 import React, { useEffect, useState } from "react";
 import {
   Box,
@@ -17,7 +17,28 @@ import {
   Avatar,
   ListItemText,
   Divider,
+  Card,
+  CardContent,
+  CardActions,
+  IconButton,
+  Modal,
+  Stack,
 } from "@mui/material";
+import {
+  Search,
+  VideoCall,
+  Chat,
+  Payment,
+  History,
+  PersonAdd,
+  Login,
+  LocalHospital,
+  AccessTime,
+  Security,
+  Phone,
+  Email,
+  Close
+} from "@mui/icons-material";
 import api from "../../lib/api";
 import { useNavigate } from "react-router-dom";
 
@@ -32,6 +53,21 @@ export default function PatientHome() {
   const [searching, setSearching] = useState(false);
   const [doctors, setDoctors] = useState([]);
   const [searchErr, setSearchErr] = useState("");
+  
+  // modal states
+  const [showFeatures, setShowFeatures] = useState(false);
+  const [showPaymentInfo, setShowPaymentInfo] = useState(false);
+  
+  // auth state
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userRole, setUserRole] = useState(null);
+  
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    const role = localStorage.getItem("role");
+    setIsLoggedIn(!!token);
+    setUserRole(role);
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -110,9 +146,213 @@ export default function PatientHome() {
   };
 
   return (
-    <Box sx={{ minHeight: "72vh", pt: 8, pb: 6 }}>
+    <Box sx={{ minHeight: "100vh", pt: 8, pb: 6 }}>
       <Container maxWidth="lg">
-        {/* Hero / Search card */}
+        {/* Hero Section */}
+        <Paper
+          sx={{
+            p: { xs: 4, md: 6 },
+            borderRadius: 3,
+            background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+            color: "white",
+            mb: 4,
+            textAlign: "center",
+            boxShadow: "0 20px 40px rgba(102, 126, 234, 0.3)"
+          }}
+        >
+          <Typography variant="h3" sx={{ fontWeight: 800, mb: 2 }}>
+            ระบบการแพทย์ทางไกล Telemedicine
+          </Typography>
+          <Typography variant="h6" sx={{ mb: 4, opacity: 0.9 }}>
+            บริการปรึกษาแพทย์ออนไลน์ที่ทันสมัย ปลอดภัย และสะดวกสบาย
+          </Typography>
+          
+          {!isLoggedIn ? (
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={2} justifyContent="center">
+              <Button
+                variant="contained"
+                size="large"
+                startIcon={<PersonAdd />}
+                onClick={() => nav("/register")}
+                sx={{
+                  bgcolor: "white",
+                  color: "primary.main",
+                  px: 4,
+                  py: 1.5,
+                  "&:hover": { bgcolor: "#f5f5f5" }
+                }}
+              >
+                สมัครสมาชิก
+              </Button>
+              <Button
+                variant="outlined"
+                size="large"
+                startIcon={<Login />}
+                onClick={() => nav("/login")}
+                sx={{
+                  borderColor: "white",
+                  color: "white",
+                  px: 4,
+                  py: 1.5,
+                  "&:hover": { bgcolor: "rgba(255,255,255,0.1)", borderColor: "white" }
+                }}
+              >
+                เข้าสู่ระบบ
+              </Button>
+            </Stack>
+          ) : (
+            <Button
+              variant="contained"
+              size="large"
+              onClick={() => nav(userRole === "doctor" ? "/doctor" : "/patient")}
+              sx={{
+                bgcolor: "white",
+                color: "primary.main",
+                px: 4,
+                py: 1.5,
+                "&:hover": { bgcolor: "#f5f5f5" }
+              }}
+            >
+              ไปยังแดชบอร์ด
+            </Button>
+          )}
+        </Paper>
+
+        {/* Features Overview */}
+        <Paper sx={{ p: 4, borderRadius: 2, mb: 4, boxShadow: "0 12px 24px rgba(0,0,0,0.1)" }}>
+          <Typography variant="h4" sx={{ fontWeight: 700, mb: 4, textAlign: "center" }}>
+            บริการหลักของเรา
+          </Typography>
+          
+          <Grid container spacing={4}>
+            <Grid item xs={12} sm={6} md={3}>
+              <Box sx={{ 
+                textAlign: "center", 
+                p: 3, 
+                borderRadius: 2,
+                bgcolor: "rgba(102, 126, 234, 0.05)",
+                border: "1px solid rgba(102, 126, 234, 0.1)",
+                transition: "all 0.3s ease",
+                "&:hover": {
+                  transform: "translateY(-4px)",
+                  boxShadow: "0 8px 25px rgba(102, 126, 234, 0.15)"
+                }
+              }}>
+                <Search sx={{ fontSize: 56, color: "primary.main", mb: 2 }} />
+                <Typography variant="h6" sx={{ fontWeight: 600, mb: 1, color: "primary.main" }}>
+                  ค้นหาแพทย์
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.6 }}>
+                  ค้นหาและจองนัดปรึกษากับแพทย์เฉพาะทางได้ง่ายๆ
+                </Typography>
+                <Button 
+                  variant="outlined" 
+                  size="small" 
+                  onClick={() => setShowFeatures(true)}
+                  sx={{ borderRadius: 20 }}
+                >
+                  เรียนรู้เพิ่มเติม
+                </Button>
+              </Box>
+            </Grid>
+            
+            <Grid item xs={12} sm={6} md={3}>
+              <Box sx={{ 
+                textAlign: "center", 
+                p: 3, 
+                borderRadius: 2,
+                bgcolor: "rgba(76, 175, 80, 0.05)",
+                border: "1px solid rgba(76, 175, 80, 0.1)",
+                transition: "all 0.3s ease",
+                "&:hover": {
+                  transform: "translateY(-4px)",
+                  boxShadow: "0 8px 25px rgba(76, 175, 80, 0.15)"
+                }
+              }}>
+                <VideoCall sx={{ fontSize: 56, color: "success.main", mb: 2 }} />
+                <Typography variant="h6" sx={{ fontWeight: 600, mb: 1, color: "success.main" }}>
+                  ปรึกษาออนไลน์
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.6 }}>
+                  พบแพทย์ผ่าน Video Call หรือ Chat ได้ทุกที่ทุกเวลา
+                </Typography>
+                <Button 
+                  variant="outlined" 
+                  size="small" 
+                  onClick={() => setShowFeatures(true)}
+                  sx={{ borderRadius: 20, borderColor: "success.main", color: "success.main" }}
+                >
+                  เรียนรู้เพิ่มเติม
+                </Button>
+              </Box>
+            </Grid>
+            
+            <Grid item xs={12} sm={6} md={3}>
+              <Box sx={{ 
+                textAlign: "center", 
+                p: 3, 
+                borderRadius: 2,
+                bgcolor: "rgba(255, 152, 0, 0.05)",
+                border: "1px solid rgba(255, 152, 0, 0.1)",
+                transition: "all 0.3s ease",
+                "&:hover": {
+                  transform: "translateY(-4px)",
+                  boxShadow: "0 8px 25px rgba(255, 152, 0, 0.15)"
+                }
+              }}>
+                <Payment sx={{ fontSize: 56, color: "warning.main", mb: 2 }} />
+                <Typography variant="h6" sx={{ fontWeight: 600, mb: 1, color: "warning.main" }}>
+                  ชำระเงินออนไลน์
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.6 }}>
+                  รองรับ PromptPay และบัตรเครดิต ปลอดภัยและสะดวก
+                </Typography>
+                <Button 
+                  variant="outlined" 
+                  size="small" 
+                  onClick={() => setShowPaymentInfo(true)}
+                  sx={{ borderRadius: 20, borderColor: "warning.main", color: "warning.main" }}
+                >
+                  ดูรายละเอียด
+                </Button>
+              </Box>
+            </Grid>
+            
+            <Grid item xs={12} sm={6} md={3}>
+              <Box sx={{ 
+                textAlign: "center", 
+                p: 3, 
+                borderRadius: 2,
+                bgcolor: "rgba(156, 39, 176, 0.05)",
+                border: "1px solid rgba(156, 39, 176, 0.1)",
+                transition: "all 0.3s ease",
+                "&:hover": {
+                  transform: "translateY(-4px)",
+                  boxShadow: "0 8px 25px rgba(156, 39, 176, 0.15)"
+                }
+              }}>
+                <History sx={{ fontSize: 56, color: "secondary.main", mb: 2 }} />
+                <Typography variant="h6" sx={{ fontWeight: 600, mb: 1, color: "secondary.main" }}>
+                  ประวัติการรักษา
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.6 }}>
+                  เข้าถึงประวัติการรักษาและใบสั่งยาได้ตลอดเวลา
+                </Typography>
+                <Button 
+                  variant="outlined" 
+                  size="small" 
+                  disabled={!isLoggedIn} 
+                  onClick={() => nav("/patient")}
+                  sx={{ borderRadius: 20, borderColor: "secondary.main", color: "secondary.main" }}
+                >
+                  ดูประวัติ
+                </Button>
+              </Box>
+            </Grid>
+          </Grid>
+        </Paper>
+
+        {/* Doctor Search Section */}
         <Paper
           sx={{
             p: { xs: 3, md: 4 },
@@ -122,10 +362,10 @@ export default function PatientHome() {
           }}
         >
           <Typography variant="h4" sx={{ fontWeight: 800, mb: 0.5 }}>
-            ยินดีต้อนรับสู่ <Box component="span" sx={{ color: "primary.main" }}>Telemed</Box>
+            ค้นหาแพทย์และ<Box component="span" sx={{ color: "primary.main" }}>จองนัดหมาย</Box>
           </Typography>
           <Typography color="text.secondary" sx={{ mb: 3 }}>
-            ค้นหาแพทย์ จองนัด และจัดการการนัดของคุณได้ง่าย ๆ
+            ค้นหาแพทย์เฉพาะทางและจองนัดปรึกษาได้ทันที
           </Typography>
 
           <Grid container spacing={2} alignItems="flex-start">
@@ -250,8 +490,12 @@ export default function PatientHome() {
                             <Button variant="outlined" size="small" onClick={() => nav(`/doctors/${d.id}`)}>
                               รายละเอียด
                             </Button>
-                            <Button variant="contained" size="small" onClick={() => goBook(d)}>
-                              จอง
+                            <Button 
+                              variant="contained" 
+                              size="small" 
+                              onClick={() => isLoggedIn ? goBook(d) : nav('/login')}
+                            >
+                              จอง{!isLoggedIn && ' (Login)'}
                             </Button>
                           </Box>
                         }
@@ -296,9 +540,165 @@ export default function PatientHome() {
 
         <Box sx={{ mt: 2 }}>
           <Typography variant="caption" color="text.secondary">
-            คำแนะนำ: กดชื่อแพทย์เพื่อดูรายละเอียดหรือกด "จอง" เพื่อดำเนินการจอง (หน้าจองจะถูกสร้างแยก)
+            คำแนะนำ: กดชื่อแพทย์เพื่อดูรายละเอียดหรือกด "จอง" เพื่อดำเนินการจอง {!isLoggedIn && "(ต้องเข้าสู่ระบบก่อน)"}
           </Typography>
         </Box>
+        
+        {/* Trust & Security Section */}
+        <Paper sx={{ p: 4, borderRadius: 2, mt: 4, bgcolor: "#f8f9fa" }}>
+          <Typography variant="h5" sx={{ fontWeight: 600, mb: 3, textAlign: "center" }}>
+            ความปลอดภัยและความน่าเชื่อถือ
+          </Typography>
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={4}>
+              <Box sx={{ textAlign: "center" }}>
+                <Security sx={{ fontSize: 40, color: "primary.main", mb: 1 }} />
+                <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>ปลอดภัยสูงสุด</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  ข้อมูลส่วนตัวและการแพทย์ได้รับการเข้ารหัสและปกป้องตามมาตรฐานสากล
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Box sx={{ textAlign: "center" }}>
+                <LocalHospital sx={{ fontSize: 40, color: "primary.main", mb: 1 }} />
+                <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>แพทย์ผู้เชี่ยวชาญ</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  แพทย์ทุกท่านได้รับการรับรองและมีประสบการณ์ในการให้คำปรึกษาทางไกล
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Box sx={{ textAlign: "center" }}>
+                <AccessTime sx={{ fontSize: 40, color: "primary.main", mb: 1 }} />
+                <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>บริการ 24/7</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  พร้อมให้บริการทุกวันตลอด 24 ชั่วโมง เพื่อดูแลสุขภาพของคุณ
+                </Typography>
+              </Box>
+            </Grid>
+          </Grid>
+        </Paper>
+        
+        {/* Contact Section */}
+        <Paper sx={{ p: 3, borderRadius: 2, mt: 4, textAlign: "center" }}>
+          <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>ติดต่อเรา</Typography>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={2} justifyContent="center">
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <Phone sx={{ color: "primary.main" }} />
+              <Typography>02-xxx-xxxx</Typography>
+            </Box>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <Email sx={{ color: "primary.main" }} />
+              <Typography>support@telemed.com</Typography>
+            </Box>
+          </Stack>
+        </Paper>
+
+        {/* Features Modal */}
+        <Modal open={showFeatures} onClose={() => setShowFeatures(false)}>
+          <Box sx={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            width: { xs: "90%", sm: 600 },
+            bgcolor: "background.paper",
+            boxShadow: 24,
+            borderRadius: 2,
+            p: 4,
+            maxHeight: "80vh",
+            overflow: "auto"
+          }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
+              <Typography variant="h5" sx={{ fontWeight: 600 }}>คุณสมบัติของระบบ</Typography>
+              <IconButton onClick={() => setShowFeatures(false)}>
+                <Close />
+              </IconButton>
+            </Box>
+            
+            <Stack spacing={3}>
+              <Box>
+                <Typography variant="h6" sx={{ fontWeight: 600, mb: 1, display: "flex", alignItems: "center", gap: 1 }}>
+                  <Search color="primary" /> ค้นหาและจองนัดแพทย์
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  • ค้นหาแพทย์เฉพาะทางตามอาการหรือสาขา<br/>
+                  • เลือกช่วงเวลาที่สะดวกสำหรับการปรึกษา<br/>
+                  • ระบบจองนัดอัตโนมัติแบบเรียลไทม์
+                </Typography>
+              </Box>
+              
+              <Box>
+                <Typography variant="h6" sx={{ fontWeight: 600, mb: 1, display: "flex", alignItems: "center", gap: 1 }}>
+                  <VideoCall color="primary" /> ปรึกษาออนไลน์
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  • Video Call คุณภาพสูง HD<br/>
+                  • ระบบ Chat สำหรับถาม-ตอบ<br/>
+                  • บันทึกการปรึกษาอัตโนมัติ
+                </Typography>
+              </Box>
+              
+              <Box>
+                <Typography variant="h6" sx={{ fontWeight: 600, mb: 1, display: "flex", alignItems: "center", gap: 1 }}>
+                  <History color="primary" /> ประวัติและใบสั่งยา
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  • เก็บประวัติการรักษาทั้งหมด<br/>
+                  • ดาวน์โหลดใบสั่งยาได้<br/>
+                  • ติดตามผลการรักษา
+                </Typography>
+              </Box>
+            </Stack>
+          </Box>
+        </Modal>
+
+        {/* Payment Info Modal */}
+        <Modal open={showPaymentInfo} onClose={() => setShowPaymentInfo(false)}>
+          <Box sx={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            width: { xs: "90%", sm: 500 },
+            bgcolor: "background.paper",
+            boxShadow: 24,
+            borderRadius: 2,
+            p: 4
+          }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
+              <Typography variant="h5" sx={{ fontWeight: 600 }}>วิธีการชำระเงิน</Typography>
+              <IconButton onClick={() => setShowPaymentInfo(false)}>
+                <Close />
+              </IconButton>
+            </Box>
+            
+            <Stack spacing={2}>
+              <Paper sx={{ p: 2, bgcolor: "#f8f9fa" }}>
+                <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>PromptPay</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  ชำระเงินผ่าน QR Code PromptPay ได้ทันที ปลอดภัยและสะดวก
+                </Typography>
+              </Paper>
+              
+              <Paper sx={{ p: 2, bgcolor: "#f8f9fa" }}>
+                <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>บัตรเครดิต/เดบิต</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  รองรับบัตร Visa, MasterCard, และ JCB<br/>
+                  ระบบเข้ารหัสข้อมูลแบบ SSL
+                </Typography>
+              </Paper>
+              
+              <Box sx={{ mt: 2, p: 2, bgcolor: "primary.main", color: "white", borderRadius: 1 }}>
+                <Typography variant="body2">
+                  <strong>ค่าบริการ:</strong> เริ่มต้น 300 บาท/ครั้ง (ขึ้นอยู่กับสาขา)
+                </Typography>
+              </Box>
+            </Stack>
+          </Box>
+        </Modal>
+        
       </Container>
     </Box>
   );

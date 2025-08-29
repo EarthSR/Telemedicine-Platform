@@ -18,7 +18,16 @@ import PatientBook from "./pages/Patient/Book.jsx"; // <-- new
 import DoctorDash from "./pages/Doctor/Dashboard.jsx";
 import DoctorProfile from "./pages/Doctor/Profile.jsx";
 import DoctorHome from "./pages/Doctor/Home.jsx";
-import DoctorSlot from "./pages/Doctor/Slot.jsx"; // <-- optional: ถ้าทำให้หมอสร้าง slot
+import DoctorSlot from "./pages/Doctor/Slot.jsx";
+
+// Consultation pages
+import VideoCall from "./pages/Consultation/VideoCall.jsx";
+
+// Payment pages
+import Payment from "./pages/Payment/Payment.jsx";
+
+// Medical pages
+import MedicalHistory from "./pages/Medical/History.jsx";
 
 /**
  * ProfileRedirect
@@ -110,6 +119,16 @@ export default function App() {
               </PrivateRoute>
             }
           />
+          
+          {/* Medical History */}
+          <Route
+            path="/patient/history"
+            element={
+              <PrivateRoute roles={["patient"]}>
+                <MedicalHistory />
+              </PrivateRoute>
+            }
+          />
 
           {/* Doctor private routes */}
           <Route
@@ -134,6 +153,36 @@ export default function App() {
             element={
               <PrivateRoute roles={["doctor"]}>
                 <DoctorSlot />
+              </PrivateRoute>
+            }
+          />
+          
+          {/* Doctor Medical History */}
+          <Route
+            path="/doctor/history"
+            element={
+              <PrivateRoute roles={["doctor"]}>
+                <MedicalHistory />
+              </PrivateRoute>
+            }
+          />
+          
+          {/* Consultation/Video Call */}
+          <Route
+            path="/consultation/:consultationId"
+            element={
+              <PrivateRoute>
+                <VideoCall />
+              </PrivateRoute>
+            }
+          />
+          
+          {/* Payment */}
+          <Route
+            path="/payment/:appointmentId"
+            element={
+              <PrivateRoute roles={["patient"]}>
+                <Payment />
               </PrivateRoute>
             }
           />
