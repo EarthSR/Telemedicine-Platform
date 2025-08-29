@@ -878,7 +878,110 @@ export async function bookAppointment(patientId, slotId, chosenDate /* YYYY-MM-D
   }
 }
 
+
+// Mock function to create a consultation
+export async function createConsultation(appointmentId, patientId, doctorId) {
+  const id = genId("consult");
+  const room_url = `/video-call/${id}`; // Mock URL
+  const sql =
+    "INSERT INTO consultations (id, appointment_id, patient_id, doctor_id, room_url, status) VALUES (?, ?, ?, ?, ?, 'pending')";
+  await pool.query(sql, [id, appointmentId, patientId, doctorId, room_url]);
+  return { id, appointment_id: appointmentId, room_url, status: 'pending' };
+}
+
+// Mock function to get consultation details
+export async function getConsultation(consultationId, user) {
+    const [rows] = await pool.query("SELECT * FROM consultations WHERE id = ?", [consultationId]);
+    const consultation = rows[0];
+    if (!consultation) {
+        const e = new Error("ไม่พบข้อมูลการปรึกษา");
+        e.statusCode = 404;
+        e.code = "NOT_FOUND";
+        throw e;
+    }
+    // Security check: only patient or doctor involved can access
+    if (user.role !== 'admin' && user.sub !== consultation.patient_id && user.sub !== consultation.doctor_id) {
+        const e = new Error("ไม่มีสิทธิ์เข้าถึงข้อมูลนี้");
+        e.statusCode = 403;
+        e.code = "FORBIDDEN";
+        throw e;
+    }
+    return consultation;
+}
+
+// Mock function to update consultation status
+export async function updateConsultationStatus(consultationId, status, user) {
+    const [rows] = await pool.query("SELECT * FROM consultations WHERE id = ?", [consultationId]);
+    const consultation = rows[0];
+    if (!consultation) {
+        const e = new Error("ไม่พบข้อมูลการปรึกษา");
+        e.statusCode = 404;
+        e.code = "NOT_FOUND";
+        throw e;
+    }
+    // Security check
+    if (user.role !== 'admin' && user.sub !== consultation.patient_id && user.sub !== consultation.doctor_id) {
+        const e = new Error("ไม่มีสิทธิ์อัปเดตข้อมูลนี้");
+        e.statusCode = 403;
+        e.code = "FORBIDDEN";
+        throw e;
+    }
+    await pool.query("UPDATE consultations SET status = ? WHERE id = ?", [status, consultationId]);
+    return { ...consultation, status };
+}
+
+
+// Mock function to create a payment
+export async function createPayment(appointmentId, amount, paymentMethod) {
+  const id = genId("payment");
+  const transaction_id = `mock_txn_${Date.now()}`;
+  const sql =
+    "INSERT INTO payments (id, appointment_id, amount, payment_method, status, transaction_id) VALUES (?, ?, ?, ?, 'completed', ?)";
+  await pool.query(sql, [id, appointmentId, amount, paymentMethod, transaction_id]);
+  // Update appointment status to 'confirmed'
+  await pool.query("UPDATE appointments SET status = 'confirmed' WHERE id = ?", [appointmentId]);
+  return { id, appointment_id: appointmentId, status: 'completed', transaction_id };
+}
+
+// Function to create a prescription
+export async function createPrescription(consultationId, doctorId, patientId, details) {
+  const id = genId("presc");
+  const sql =
+    "INSERT INTO prescriptions (id, consultation_id, doctor_id, patient_id, details) VALUES (?, ?, ?, ?, ?)";
+  await pool.query(sql, [id, consultationId, doctorId, patientId, JSON.stringify(details)]);
+  return { id, consultation_id: consultationId, details };
+}
+
+// Function to get prescriptions for a user
+export async function getMyPrescriptions(userId, role) {
+    let sql;
+    if (role === 'patient') {
+        sql = `
+            SELECT pr.id, pr.details, pr.created_at, pr.updated_at, c.id as consultation_id, u.full_name as doctor_name
+            FROM prescriptions pr
+            JOIN consultations c ON pr.consultation_id = c.id
+            JOIN users u ON pr.doctor_id = u.id
+            WHERE pr.patient_id = ?
+            ORDER BY pr.created_at DESC
+        `;
+    } else if (role === 'doctor') {
+        sql = `
+            SELECT pr.id, pr.details, pr.created_at, pr.updated_at, c.id as consultation_id, u.full_name as patient_name
+            FROM prescriptions pr
+            JOIN consultations c ON pr.consultation_id = c.id
+            JOIN users u ON pr.patient_id = u.id
+            WHERE pr.doctor_id = ?
+            ORDER BY pr.created_at DESC
+        `;
+    } else {
+        return [];
+    }
+    const [rows] = await pool.query(sql, [userId]);
+    return rows;
+}
+
 export async function listAppointmentsForUser(userId, role) {
+
   if (role === "patient") {
     const [rows] = await pool.query(
       `SELECT a.id, a.status, a.created_at,
@@ -1031,6 +1134,30 @@ const BookSchema = z.object({
 const ReportQuery = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "รูปแบบวันที่ไม่ถูกต้อง (YYYY-MM-DD)").optional(),
   doctor_id: z.string().length(36).optional() // admin จะส่งมาก็ได้
+});
+
+const CreateConsultationSchema = z.object({
+  appointment_id: z.string().min(1, "กรุณาระบุ ID การนัดหมาย"),
+});
+
+const UpdateConsultationStatusSchema = z.object({
+    status: z.enum(['in_progress', 'completed', 'cancelled']),
+});
+
+const CreatePaymentSchema = z.object({
+  amount: z.number().positive("จำนวนเงินต้องมากกว่า 0"),
+  payment_method: z.enum(['promptpay', 'credit_card', 'mock']),
+});
+
+const CreatePrescriptionSchema = z.object({
+  details: z.object({
+    medications: z.array(z.object({
+        name: z.string().min(1, "กรุณาระบุชื่อยา"),
+        dosage: z.string().min(1, "กรุณาระบุขนาดยา"),
+        instructions: z.string().optional(),
+    })),
+    notes: z.string().optional(),
+  }),
 });
 
 // =========================== SWAGGER / OPENAPI ===========================
@@ -1598,6 +1725,101 @@ app.get(
 const UpdateApptStatusSchema = z.object({
   status: z.enum(["pending", "confirmed", "rejected", "cancelled"], { message: "สถานะไม่ถูกต้อง" }),
 });
+
+// Consultation Routes (Mock)
+app.post(
+  "/api/consultations",
+  requireAuth(["patient", "doctor"]),
+  asyncHandler(async (req, res) => {
+    const parsed = CreateConsultationSchema.safeParse(req.body);
+    if (!parsed.success) return respondValidation(res, parsed.error);
+
+    const { appointment_id } = parsed.data;
+    const [apptRows] = await pool.query("SELECT * FROM appointments WHERE id = ?", [appointment_id]);
+    const appointment = apptRows[0];
+
+    if (!appointment) {
+        return res.status(404).json({ error: { code: "NOT_FOUND", message: "ไม่พบการนัดหมาย" } });
+    }
+
+    // Security check: only involved parties can create
+    if (req.user.sub !== appointment.patient_id && req.user.sub !== appointment.doctor_id) {
+        return res.status(403).json({ error: { code: "FORBIDDEN", message: "ไม่มีสิทธิ์สร้างการปรึกษา" } });
+    }
+
+    const consultation = await createConsultation(appointment.id, appointment.patient_id, appointment.doctor_id);
+    res.status(201).json({ consultation });
+  })
+);
+
+app.get(
+    "/api/consultations/:id",
+    requireAuth(),
+    asyncHandler(async (req, res) => {
+        const consultation = await getConsultation(req.params.id, req.user);
+        res.json({ consultation });
+    })
+);
+
+app.patch(
+    "/api/consultations/:id/status",
+    requireAuth(),
+    asyncHandler(async (req, res) => {
+        const parsed = UpdateConsultationStatusSchema.safeParse(req.body);
+        if (!parsed.success) return respondValidation(res, parsed.error);
+        const { status } = parsed.data;
+        const consultation = await updateConsultationStatus(req.params.id, status, req.user);
+        res.json({ consultation });
+    })
+);
+
+
+// Payment Route (Mock)
+app.post(
+  "/api/appointments/:id/payment",
+  requireAuth(["patient"]),
+  asyncHandler(async (req, res) => {
+    const parsed = CreatePaymentSchema.safeParse(req.body);
+    if (!parsed.success) return respondValidation(res, parsed.error);
+
+    const { amount, payment_method } = parsed.data;
+    const appointmentId = req.params.id;
+
+    // In a real app, you'd verify the appointment and amount
+    const payment = await createPayment(appointmentId, amount, payment_method);
+    res.status(201).json({ payment });
+  })
+);
+
+// Prescription Routes
+app.post(
+  "/api/consultations/:id/prescriptions",
+  requireAuth(["doctor"]),
+  asyncHandler(async (req, res) => {
+    const parsed = CreatePrescriptionSchema.safeParse(req.body);
+    if (!parsed.success) return respondValidation(res, parsed.error);
+
+    const consultationId = req.params.id;
+    const [consultRows] = await pool.query("SELECT * FROM consultations WHERE id = ?", [consultationId]);
+    const consultation = consultRows[0];
+
+    if (!consultation || consultation.doctor_id !== req.user.sub) {
+        return res.status(404).json({ error: { code: "NOT_FOUND", message: "ไม่พบการปรึกษา หรือไม่มีสิทธิ์" } });
+    }
+
+    const prescription = await createPrescription(consultationId, consultation.doctor_id, consultation.patient_id, parsed.data.details);
+    res.status(201).json({ prescription });
+  })
+);
+
+app.get(
+    "/api/prescriptions/me",
+    requireAuth(),
+    asyncHandler(async (req, res) => {
+        const prescriptions = await getMyPrescriptions(req.user.sub, req.user.role);
+        res.json({ data: prescriptions });
+    })
+);
 
 // =========================== REPORTS (admin OR doctor) ===========================
 // GET /reports/appointments[?date=YYYY-MM-DD][&doctor_id=...]
