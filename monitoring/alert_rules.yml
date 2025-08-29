@@ -1,0 +1,36 @@
+groups:
+  # ========= HOST LEVEL =========
+  - name: host.rules
+    rules:
+      # Target ของ Prometheus ล่ม
+      - alert: TargetDown
+        expr: up == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "Target down: {{ $labels.job }} @ {{ $labels.instance }}"
+          description: "Prometheus target {{ $labels.job }} on {{ $labels.instance }} is down for >1m."
+
+      # CPU > 80% นาน 5 นาที
+      - alert: HighCpuUsage
+        expr: (1 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m]))) * 100 > 80
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "CPU สูงที่ {{ $labels.instance }}"
+          description: "CPU ใช้งานเกิน 80% ต่อเนื่อง 5 นาที ({{ printf \"%.2f\" $value }}%)."
+
+      # Memory > 80% นาน 5 นาที
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 80
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "หน่วยความจำสูงที่ {{ $labels.instance }}"
+          description: "Memory ใช้งานเกิน 80% ต่อเนื่อง 5 นาที ({{ printf \"%.2f\" $value }}%)."
+
+
+
+
+
+
