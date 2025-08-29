@@ -3,11 +3,13 @@ services:
     image: mysql:8.0
     container_name: telemed-mysql
     restart: unless-stopped
+    env_file: .env
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?required}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?required}
+      MYSQL_USER: ${MYSQL_USER:?required}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?required}
+      TZ: Asia/Bangkok
     command: [
       "--default-authentication-plugin=mysql_native_password",
       "--character-set-server=utf8mb4",
@@ -32,20 +34,20 @@ services:
     env_file: .env
     environment:
       NODE_ENV: production
-      PORT: ${PORT}
+      PORT: ${PORT:?required}
       DB_HOST: db
       DB_PORT: 3306
-      DB_USER: ${MYSQL_USER}
-      DB_PASSWORD: ${MYSQL_PASSWORD}
-      DB_NAME: ${MYSQL_DATABASE}
+      DB_USER: ${MYSQL_USER:?required}
+      DB_PASSWORD: ${MYSQL_PASSWORD:?required}
+      DB_NAME: ${MYSQL_DATABASE:?required}
+      TZ: Asia/Bangkok
     depends_on:
       db:
         condition: service_healthy
     volumes:
       - ./uploads:/app/uploads
-    # ไม่เปิดพอร์ตออกสู่ host — ให้ nginx เป็นตัวหน้า
     expose:
-      - "${PORT}"
+      - "${PORT:-4005}"
     healthcheck:
       test: ["CMD", "node", "-e", "const http=require('http');const p=process.env.PORT||4005;http.get('http://127.0.0.1:'+p+'/api/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1));"]
       interval: 10s
@@ -60,7 +62,7 @@ services:
     container_name: telemed-nginx
     restart: unless-stopped
     ports:
-      - "80:80"        # เรียกจาก host แค่พอร์ต 80
+      - "80:80"
     depends_on:
       api:
         condition: service_healthy

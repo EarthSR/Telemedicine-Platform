@@ -2,7 +2,7 @@ name: CI/CD (Self-Hosted -> Docker Compose)
 
 on:
   push:
-    branches: [ "main", "dev" ]
+    branches: [ "main" ]
 
 jobs:
   pipeline:
@@ -10,6 +10,12 @@ jobs:
     defaults:
       run:
         shell: bash
+
+    # แมป secrets -> env เพื่อใช้ตรวจใน if: (VS Code จะไม่ฟ้อง)
+    env:
+      DOCKERHUB_USERNAME_ENV: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN_ENV: ${{ secrets.DOCKERHUB_TOKEN }}
+
     steps:
       # 1) Checkout source code
       - name: 1) Checkout
@@ -34,21 +40,35 @@ jobs:
           npm ci || true
           npm run build --if-present
 
-      # 3) Write .env from Secrets (ไม่ใส่ช่องว่างนำหน้า)
-      - name: 3) Write .env from Secrets
-        run: |
-          printf "%s" "${{ secrets.ENV_FILE }}" > .env
+      # 3) (Optional) Docker Hub login – เช็ค env ที่มาจาก secrets
+      - name: 3) Docker Hub login
+        if: ${{ env.DOCKERHUB_USERNAME_ENV != '' && env.DOCKERHUB_TOKEN_ENV != '' }}
+        uses: docker/login-action@v3
+        with:
+          registry: docker.io
+          username: ${{ env.DOCKERHUB_USERNAME_ENV }}
+          password: ${{ env.DOCKERHUB_TOKEN_ENV }}
 
-      # 4) Deploy with Docker Compose
-      - name: 4) docker compose build & up
+      # 4) Write .env from Secrets
+      - name: 4) Write .env from Secrets
         run: |
           set -e
-          docker compose build --pull
-          docker compose up -d --remove-orphans
+          printf "%s" "${{ secrets.ENV_FILE }}" > .env
+          awk -F= '/^[A-Za-z0-9_]+=/ {print "ENV KEY:", $1}' .env
+
+      # 5) Deploy with Docker Compose (ใช้ --env-file ให้ชัดเจน)
+      - name: 5) docker compose build & up
+        run: |
+          set -e
+          ls -la .
+          test -f .env
+          test -f docker-compose.yml
+          docker compose --env-file .env build --pull
+          docker compose --env-file .env up -d --remove-orphans
           docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"
 
-      # 5) Healthchecks
-      - name: 5.1) Healthcheck API
+      # 6) Healthchecks
+      - name: 6.1) Healthcheck API
         run: |
           set -e
           code=$(curl -s -o /tmp/api_health.json -w "%{http_code}" http://127.0.0.1/api/health || true)
@@ -59,7 +79,7 @@ jobs:
             exit 1
           fi
 
-      - name: 5.2) Healthcheck Web
+      - name: 6.2) Healthcheck Web
         run: |
           set -e
           code=$(curl -sI -o /dev/null -w "%{http_code}" http://127.0.0.1/ || true)
