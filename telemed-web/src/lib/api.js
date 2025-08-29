@@ -1,7 +1,16 @@
 // src/lib/api.js
 import axios from "axios";
 
-const BASE = "http://localhost/api";
+// ป้องกันปัญหา localhost: ใช้ค่า .env ของ Vite ถ้ามี ไม่งั้นใช้ /api (relative)
+// รองรับได้ทั้งรูปแบบ absolute (http://ip:port/api) และ relative (/api หรือ api)
+function normalizeBase(value) {
+  if (!value) return "/api";
+  const v = String(value).trim();
+  if (/^https?:\/\//i.test(v)) return v.replace(/\/+$/, ""); // absolute URL
+  return `/${v.replace(/^\/+/, "").replace(/\/+$/, "")}`;     // relative path
+}
+
+const BASE = normalizeBase(import.meta?.env?.VITE_API_URL);
 
 const api = axios.create({
   baseURL: BASE,
