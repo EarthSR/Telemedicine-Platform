@@ -1,0 +1,14 @@
+FROM node:20-alpine
+WORKDIR /app
+
+# ติดตั้ง dependencies จาก package.json 
+COPY package*.json ./
+RUN npm ci --omit=dev
+
+# คัดลอกโค้ด API
+COPY server.js ./
+ENV NODE_ENV=production
+ENV PORT=4005
+EXPOSE 4005
+
+CMD ["node", "server.js"]
