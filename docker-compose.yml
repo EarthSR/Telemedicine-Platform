@@ -34,7 +34,7 @@ services:
     env_file: .env
     environment:
       NODE_ENV: production
-      PORT: ${PORT:?required}
+      PORT: ${PORT:-4005}          # ให้ default 4005 ถ้าไม่ได้เซ็ต
       DB_HOST: db
       DB_PORT: 3306
       DB_USER: ${MYSQL_USER:?required}
@@ -62,12 +62,109 @@ services:
     container_name: telemed-nginx
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "80:80"   # ต้องการให้เข้าได้ใน LAN ด้วยก็เก็บไว้ ถ้าจะพึ่ง tunnel อย่างเดียวลบได้
     depends_on:
       api:
         condition: service_healthy
     volumes:
       - ./uploads:/usr/share/nginx/html/uploads:ro
+    healthcheck:
+      test: ["CMD-SHELL", "nginx -t && [ -f /var/run/nginx.pid ]"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [appnet]
+
+  # ---------- Monitoring PoC ----------
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: prometheus
+    restart: unless-stopped
+    ports: ["9090:9090"]
+    volumes:
+      - ./monitoring:/etc/prometheus:ro
+    depends_on:
+      - node-exporter
+      - cadvisor
+      - alertmanager
+    networks: [appnet]
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: alertmanager
+    restart: unless-stopped
+    ports: ["9093:9093"]
+    volumes:
+       - ./monitoring:/etc/alertmanager:ro
+    networks: [appnet]
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: grafana
+    restart: unless-stopped
+    ports: ["3000:3000"]
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    networks: [appnet]
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.1
+    container_name: node-exporter
+    restart: unless-stopped
+    pid: host
+    ports: ["9100:9100"]
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/rootfs
+    networks: [appnet]
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.2
+    container_name: cadvisor
+    restart: unless-stopped
+    privileged: true
+    ports: ["8080:8080"]
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks: [appnet]
+
+  loki:
+    profiles: ["logs"]
+    image: grafana/loki:2.9.8
+    container_name: loki
+    restart: unless-stopped
+    command: -config.file=/etc/loki/local-config.yaml
+    networks: [appnet]
+
+  promtail:
+    profiles: ["logs"]
+    image: grafana/promtail:2.9.8
+    container_name: promtail
+    restart: unless-stopped
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./monitoring/promtail-config.yml:/etc/promtail/config.yml:ro
+    command: -config.file=/etc/promtail/config.yml
+    networks: [appnet]
+
+  # ---------- (HTTPS ไม่ต้องโดเมน) ----------
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: unless-stopped
+    depends_on:
+      - nginx
+    command: ["tunnel", "--no-autoupdate", "--url", "http://telemed-nginx:80"]
     networks: [appnet]
 
 volumes:
