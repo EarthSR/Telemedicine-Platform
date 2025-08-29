@@ -19,7 +19,7 @@ import Visibility from "@mui/icons-material/Visibility";
 import VisibilityOff from "@mui/icons-material/VisibilityOff";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
-
+import api from "../../lib/api";
 const fadeIn = keyframes`
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
@@ -114,19 +114,20 @@ export default function Login() {
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errMsg, setErrMsg] = useState("");
-  const [rememberMe, setRememberMe] = useState(true); // ✅ แก้ไขตรงนี้ให้เป็นค่าเริ่มต้น true
+  const [rememberMe, setRememberMe] = useState(true); // ค่าเริ่มต้น true
   const navigate = useNavigate();
-
-  const LOGIN_BASE = import.meta.env.VITE_API_URL || "http://localhost:4005";
-  const LOGIN_URL = `${LOGIN_BASE}/auth/login`;
-  const WHOAMI_URL = `${LOGIN_BASE}/auth/me`;
 
   const validateInputs = () => {
     if (!email.trim()) return "กรุณาใส่อีเมล";
     const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     let emailToSend = email.trim();
-    if (!emailToSend.includes('@') && !emailToSend.includes('.com') && !emailToSend.includes('.th') && !emailToSend.includes('.ac.th')) {
-      emailToSend += '@gmail.com';
+    if (
+      !emailToSend.includes("@") &&
+      !emailToSend.includes(".com") &&
+      !emailToSend.includes(".th") &&
+      !emailToSend.includes(".ac.th")
+    ) {
+      emailToSend += "@gmail.com";
     }
     if (!re.test(emailToSend)) return "รูปแบบอีเมลไม่ถูกต้อง";
     if (!password) return "กรุณาใส่รหัสผ่าน";
@@ -141,12 +142,18 @@ export default function Login() {
     setLoading(true);
 
     let emailToSend = email.trim();
-    if (!emailToSend.includes('@') && !emailToSend.includes('.com') && !emailToSend.includes('.th') && !emailToSend.includes('.ac.th')) {
-      emailToSend += '@gmail.com';
+    if (
+      !emailToSend.includes("@") &&
+      !emailToSend.includes(".com") &&
+      !emailToSend.includes(".th") &&
+      !emailToSend.includes(".ac.th")
+    ) {
+      emailToSend += "@gmail.com";
     }
 
     try {
-      const res = await axios.post(LOGIN_URL, { email: emailToSend, password });
+      // ✅ เรียกผ่าน axios instance ที่ baseURL = "/api"
+      const res = await api.post("/auth/login", { email: emailToSend, password });
       const token = res?.data?.token;
       let user = res?.data?.user || null;
 
@@ -158,20 +165,18 @@ export default function Login() {
 
       if (!token) throw new Error("โทเค็นจากเซิร์ฟเวอร์ไม่ถูกต้อง");
 
-      // save both keys to be compatible with different code in repo
+      // บางส่วนของโค้ดที่อื่นอาจใช้ชื่อ key ต่างกัน เก็บให้ครบ
       localStorage.setItem("token", token);
       localStorage.setItem("accessToken", token);
 
-      // if server didn't return user or role, try /auth/me
+      // ถ้า login ไม่คืน user/role ลองดึงเพิ่มจาก /auth/me
       if (!user || !user.role) {
         try {
-          const me = await axios.get(WHOAMI_URL, {
+          const me = await api.get("/auth/me", {
             headers: { Authorization: `Bearer ${token}` },
           });
-          // server might return either { user: {...} } or direct user object
           user = me?.data?.user || me?.data || user;
         } catch (e) {
-          // ignore — we'll fallback to patient if role still missing
           console.warn("whoami failed:", e?.response?.status || e.message);
         }
       }
@@ -179,19 +184,20 @@ export default function Login() {
       if (user) {
         localStorage.setItem("user", JSON.stringify(user));
       }
-
       if (user?.role) {
         localStorage.setItem("role", user.role);
       }
 
       const role = user?.role || localStorage.getItem("role") || "patient";
-
-      // navigate instead of full reload — cleaner
       if (role === "doctor") navigate("/doctor/home", { replace: true });
       else navigate("/patient/home", { replace: true });
+
     } catch (err) {
       console.error("Login error:", err);
-      const serverMsg = err?.response?.data?.error?.message || err?.response?.data?.message;
+      const serverMsg =
+        err?.response?.data?.error?.message ||
+        err?.response?.data?.message ||
+        err?.message;
       setErrMsg(serverMsg || "เข้าสู่ระบบไม่สำเร็จ กรุณาตรวจสอบข้อมูลแล้วลองใหม่");
     } finally {
       setLoading(false);

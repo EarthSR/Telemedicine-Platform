@@ -25,34 +25,34 @@ import fs from "fs";
 import path from "path";
 import multer from "multer";
 import { fileURLToPath } from "url";
-
-
+import dotenv from 'dotenv';
+dotenv.config();
 ///////////////////////////////
 // 2) CONFIG / ENV
 ///////////////////////////////
 const env = {
-  PORT: process.env.PORT || 4005,
-  DB_HOST: process.env.DB_HOST || "localhost",
-  DB_PORT: Number(process.env.DB_PORT || 3306),
-  DB_USER: process.env.DB_USER || "root",
-  DB_PASSWORD: process.env.DB_PASSWORD || "1234",
-  DB_NAME: process.env.DB_NAME || "telemedicinedb",
-  JWT_SECRET: process.env.JWT_SECRET || "change-me-very-secret",
-  REDIS_URL: process.env.REDIS_URL || "",
+  PORT: process.env.PORT,
+  DB_HOST: process.env.DB_HOST ,
+  DB_PORT: process.env.DB_PORT,
+  DB_USER: process.env.DB_USER,
+  DB_PASSWORD: process.env.DB_PASSWORD,
+  DB_NAME: process.env.DB_NAME,
+  JWT_SECRET: process.env.JWT_SECRET,
+  REDIS_URL: process.env.REDIS_URL,
 };
 
 ///////////////////////////////
 // 3) DB POOL
 ///////////////////////////////
 const pool = mysql.createPool({
-  host: env.DB_HOST,
-  port: env.DB_PORT,
-  user: env.DB_USER,
-  password: env.DB_PASSWORD,
-  database: env.DB_NAME,
+  host: process.env.DB_HOST,
+  port: process.env.DB_PORT,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
   connectionLimit: 10,
-  waitForConnections: true,
 });
+
 
 ///////////////////////////////
 // 4) EXPRESS APP + MIDDLEWARE
@@ -120,7 +120,7 @@ const UPLOAD_DIR = path.resolve(__dirname, "uploads");
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 // ก่อน app.use("/uploads", express.static(UPLOAD_DIR));
-app.use("/uploads", (req, res, next) => {
+app.use("/api/uploads", (req, res, next) => {
   // Allow fetch/embed from any origin
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
@@ -1269,13 +1269,13 @@ app.use("/docs", swaggerUi.serve, swaggerUi.setup(openapiSpec));
 ///////////////////////////////
 
 // healthcheck
-app.get("/health", (req, res) => {
+app.get("/api/health", (req, res) => {
   res.json({ ok: true, ts: new Date().toISOString() });
 });
 
 // register
 app.post(
-  "/auth/register",
+  "/api/auth/register",
   upload.single("userpic"), 
   asyncHandler(async (req, res) => {
     const body = { ...req.body };
@@ -1301,7 +1301,7 @@ app.post(
 
 // ESCALATED LOGIN + IP BLOCK
 app.post(
-  "/auth/login",
+  "/api/auth/login",
   asyncHandler(async (req, res) => {
     // 1) validate
     const parsed = LoginSchema.safeParse(req.body || {});
@@ -1393,7 +1393,7 @@ app.post(
 
 // แทน handler เดิมของ /users/me ด้วยโค้ดนี้
 app.get(
-  "/users/me",
+  "/api/users/me",
   requireAuth(),
   asyncHandler(async (req, res) => {
     const user = await getUserProfile(req.user.sub);
@@ -1419,7 +1419,7 @@ app.get(
 
 
 app.put(
-  "/users/me",
+  "/api/users/me",
   requireAuth(),
   upload.single("userpic"),
   asyncHandler(async (req, res) => {
@@ -1461,7 +1461,7 @@ app.put(
 
 // doctors
 app.get(
-  "/doctors",
+  "/api/doctors",
   asyncHandler(async (req, res) => {
     // ===== ALIAS HANDLING =====
     // รองรับ ?specialty= ทั้ง 3 รูปแบบ:
@@ -1494,7 +1494,7 @@ app.get(
 );
 
 app.post(
-  "/doctors/:id/slots",
+  "/api/doctors/:id/slots",
   requireAuth(["doctor"]),
   asyncHandler(async (req, res) => {
     if (req.params.id !== req.user.sub) {
@@ -1509,7 +1509,7 @@ app.post(
 );
 
 app.get(
-  "/doctors/:id/slots",
+  "/api/doctors/:id/slots",
   asyncHandler(async (req, res) => {
     const parsed = ListSlotsQuery.safeParse(req.query);
     if (!parsed.success) return respondValidation(res, parsed.error);
@@ -1520,7 +1520,7 @@ app.get(
 
 // appointments
 app.post(
-  "/appointments",
+  "/api/appointments",
   requireAuth(["patient"]),
   asyncHandler(async (req, res) => {
     const parsed = BookSchema.safeParse(req.body);
@@ -1532,7 +1532,7 @@ app.post(
 );
 
 app.patch(
-  "/appointments/:id/status",
+  "/api/appointments/:id/status",
   requireAuth(["doctor"]),
   asyncHandler(async (req, res) => {
     const apptId = req.params.id;
@@ -1559,7 +1559,7 @@ app.patch(
 );
 
 app.get(
-  "/appointments/me",
+  "/api/appointments/me",
   requireAuth(),
   asyncHandler(async (req, res) => {
     const list = await listAppointmentsForUser(req.user.sub, req.user.role);
@@ -1569,7 +1569,7 @@ app.get(
 
 // เพิ่ม alias ให้ตรงข้อสอบ
 app.get(
-  "/appointments/doctor/me",
+  "/api/appointments/doctor/me",
   requireAuth(["doctor"]),
   asyncHandler(async (req, res) => {
     const list = await listAppointmentsForUser(req.user.sub, "doctor");
@@ -1578,7 +1578,7 @@ app.get(
 );
 
 app.get(
-  "/appointments/patient/me",
+  "/api/appointments/patient/me",
   requireAuth(["patient"]),
   asyncHandler(async (req, res) => {
     const list = await listAppointmentsForUser(req.user.sub, "patient");
@@ -1588,7 +1588,7 @@ app.get(
 
 // GET /specialties - คืนรายการ specialties ทั้งหมด
 app.get(
-  "/specialties",
+  "/api/specialties",
   asyncHandler(async (req, res) => {
     const [rows] = await pool.query("SELECT id, name FROM specialties ORDER BY name ASC");
     res.json({ data: rows });
@@ -1604,7 +1604,7 @@ const UpdateApptStatusSchema = z.object({
 // - admin: เห็นทั้งระบบ หรือ zoom-in ด้วย doctor_id
 // - doctor: เห็นเฉพาะของตัวเอง (ห้ามส่ง doctor_id เป็นคนอื่น)
 app.get(
-  "/reports/appointments",
+  "/api/reports/appointments",
   requireAuth(["admin", "doctor"]),
   asyncHandler(async (req, res) => {
     // parse
@@ -1732,6 +1732,7 @@ app.use((err, _req, res, _next) => {
 ///////////////////////////////
 // 12) START SERVER
 ///////////////////////////////
-app.listen(env.PORT, () => {
-  console.log("server started on port", env.PORT);
+const PORT = Number(process.env.PORT) || 4005;
+app.listen(PORT, '0.0.0.0', () => {
+  console.log('server started on port', PORT);
 });

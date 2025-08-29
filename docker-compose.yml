@@ -1,0 +1,76 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: telemed-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    command: [
+      "--default-authentication-plugin=mysql_native_password",
+      "--character-set-server=utf8mb4",
+      "--collation-server=utf8mb4_unicode_ci"
+    ]
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./db/telemedicinedb.sql:/docker-entrypoint-initdb.d/00_init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD} || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    networks: [appnet]
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: telemed-api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PORT: ${PORT}
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USER: ${MYSQL_USER}
+      DB_PASSWORD: ${MYSQL_PASSWORD}
+      DB_NAME: ${MYSQL_DATABASE}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./uploads:/app/uploads
+    # ไม่เปิดพอร์ตออกสู่ host — ให้ nginx เป็นตัวหน้า
+    expose:
+      - "${PORT}"
+    healthcheck:
+      test: ["CMD", "node", "-e", "const http=require('http');const p=process.env.PORT||4005;http.get('http://127.0.0.1:'+p+'/api/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1));"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    networks: [appnet]
+
+  nginx:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
+    container_name: telemed-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"        # เรียกจาก host แค่พอร์ต 80
+    depends_on:
+      api:
+        condition: service_healthy
+    volumes:
+      - ./uploads:/usr/share/nginx/html/uploads:ro
+    networks: [appnet]
+
+volumes:
+  db_data:
+
+networks:
+  appnet:
+    driver: bridge
