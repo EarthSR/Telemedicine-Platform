@@ -10,8 +10,8 @@ function normalizeBase(value) {
   return `/${v.replace(/^\/+/, "").replace(/\/+$/, "")}`;     // relative path
 }
 
-// const BASE = normalizeBase(import.meta?.env?.VITE_API_URL);
-const BASE = "http://localhost:4005/api";
+const BASE = normalizeBase(import.meta?.env?.VITE_API_URL);
+// const BASE = "http://localhost:4005/api";
 
 const api = axios.create({
   baseURL: BASE,
