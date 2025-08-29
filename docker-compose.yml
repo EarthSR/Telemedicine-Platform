@@ -137,6 +137,26 @@ services:
       - /var/lib/docker/:/var/lib/docker:ro
     networks: [appnet]
 
+  loki:
+    profiles: ["logs"]
+    image: grafana/loki:2.9.8
+    container_name: loki
+    restart: unless-stopped
+    command: -config.file=/etc/loki/local-config.yaml
+    networks: [appnet]
+
+  promtail:
+    profiles: ["logs"]
+    image: grafana/promtail:2.9.8
+    container_name: promtail
+    restart: unless-stopped
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./monitoring/promtail-config.yml:/etc/promtail/config.yml:ro
+    command: -config.file=/etc/promtail/config.yml
+    networks: [appnet]
+
   # ---------- (HTTPS ไม่ต้องโดเมน) ----------
   cloudflared:
     image: cloudflare/cloudflared:latest
