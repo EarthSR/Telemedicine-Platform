@@ -6,6 +6,7 @@ on:
 
 jobs:
   pipeline:
+    environment: ci-cd-WebApp
     runs-on: self-hosted
     defaults:
       run:
