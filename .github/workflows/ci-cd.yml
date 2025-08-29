@@ -55,13 +55,39 @@ jobs:
         run: |
           set -e
           printf "%s" "${{ secrets.ENV_FILE }}" > .env
+
           echo "---- .env keys ----"
           awk -F= '/^[A-Za-z0-9_]+=/ {print "ENV KEY:", $1}' .env
           echo "-------------------"
-          # ตรวจว่ามีคีย์จำเป็น
-          for k in MYSQL_ROOT_PASSWORD MYSQL_DATABASE MYSQL_USER MYSQL_PASSWORD PORT; do
-            grep -q "^$k=" .env || { echo "❌ Missing $k in .env"; exit 1; }
+
+          # ฟังก์ชันอ่านค่าจาก .env ป้องกันกรณีมีช่องว่าง/CRLF
+          getv () { grep -E "^$1=" .env | sed "s/^$1=//" | tr -d '\r'; }
+
+          # เช็กคีย์ MySQL ต้องไม่ว่าง
+          for k in MYSQL_ROOT_PASSWORD MYSQL_DATABASE MYSQL_USER MYSQL_PASSWORD; do
+            val="$(getv "$k")"
+            if [ -z "$val" ]; then
+                echo "❌ $k is empty or missing in .env"
+                exit 1
+            fi
           done
+
+          # ตั้งค่า PORT ให้มี default ถ้าไม่ได้ใส่มา
+          PORT_VAL="$(getv PORT)"
+          if [ -z "$PORT_VAL" ]; then
+            echo "PORT=4005" >> .env
+            echo "ℹ️ Set default PORT=4005"
+          fi
+
+          # โชว์ความยาวค่าแบบ mask (ไม่เผย secret)
+          for k in MYSQL_ROOT_PASSWORD MYSQL_DATABASE MYSQL_USER MYSQL_PASSWORD PORT; do
+            val="$(getv "$k")"
+            echo "OK $k: length=${#val}"
+          done
+
+          echo "---- docker compose config preview ----"
+          # ดูว่าการแทนค่าตัวแปรใน compose เกิดจริง
+          docker compose --env-file .env config >/dev/null || { echo "compose config failed"; exit 1; }
 
       # 5) Build & Up (รอจน healthy)
       - name: 5) docker compose build & up
@@ -95,9 +121,12 @@ jobs:
           done
           echo "API unhealthy after retries. Dumping diagnostics..."
           docker compose ps || true
-          echo "---- nginx logs ----";  docker logs --tail=200 telemed-nginx || true
-          echo "---- api logs ----";    docker logs --tail=200 telemed-api || true
-          echo "---- mysql logs ----";  docker logs --tail=200 telemed-mysql || true
+          echo "---- nginx logs ----"
+          docker logs --tail=200 telemed-nginx || true
+          echo "---- api logs ----"
+          docker logs --tail=200 telemed-api || true
+          echo "---- mysql logs ----"
+          docker logs --tail=200 telemed-mysql || true
           echo "---- health states ----"
           for c in telemed-nginx telemed-api telemed-mysql; do
             echo "## $c"
