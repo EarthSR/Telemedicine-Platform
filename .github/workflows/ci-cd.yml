@@ -2,41 +2,44 @@ name: CI/CD (Self-Hosted -> Docker Compose)
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "dev" ]
 
 jobs:
   pipeline:
-    runs-on: self-hosted   # รันบนเซิร์ฟเวอร์ที่บ้าน 
+    runs-on: self-hosted
+    defaults:
+      run:
+        shell: bash
     steps:
       # 1) Checkout source code
       - name: 1) Checkout
         uses: actions/checkout@v4
 
-      # 2) Build + Run Unit Test 
+      # 2) Setup Node
       - name: 2) Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
-      - name: 2.1) API tests 
+      # 2.1) API tests
+      - name: 2.1) API tests
         run: |
           npm ci || true
-          npm test --if-present "
+          npm test --if-present
 
-      - name: 2.2) Web build check 
+      # 2.2) Web build check
+      - name: 2.2) Web build check
         working-directory: telemed-web
         run: |
           npm ci || true
-          npm run build --if-present "
+          npm run build --if-present
 
-      # 3) Build Docker Image (ด้วย compose) 
+      # 3) Write .env from Secrets (ไม่ใส่ช่องว่างนำหน้า)
       - name: 3) Write .env from Secrets
         run: |
-          cat > .env <<'EOF'
-          ${{ secrets.ENV_FILE }}
-          EOF
+          printf "%s" "${{ secrets.ENV_FILE }}" > .env
 
-      # 4) Deploy ไปยัง Docker Compose environment (เครื่องนี้เลย)
+      # 4) Deploy with Docker Compose
       - name: 4) docker compose build & up
         run: |
           set -e
@@ -44,18 +47,24 @@ jobs:
           docker compose up -d --remove-orphans
           docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"
 
-      # 5) Run Integration Test หลัง deploy
+      # 5) Healthchecks
       - name: 5.1) Healthcheck API
         run: |
           set -e
           code=$(curl -s -o /tmp/api_health.json -w "%{http_code}" http://127.0.0.1/api/health || true)
           echo "API HTTP $code"
           cat /tmp/api_health.json 2>/dev/null || true
-          test "$code" = "200"
+          if [[ "$code" != "200" ]]; then
+            echo "API unhealthy"
+            exit 1
+          fi
 
       - name: 5.2) Healthcheck Web
         run: |
           set -e
           code=$(curl -sI -o /dev/null -w "%{http_code}" http://127.0.0.1/ || true)
           echo "WEB HTTP $code"
-          test "$code" = "200" -o "$code" = "304" -o "$code" = "204"   # ยืดหยุ่นเล็กน้อย
+          case "$code" in
+            200|204|304) echo "WEB ok" ;;
+            *) echo "WEB unhealthy"; exit 1 ;;
+          esac
