@@ -12,7 +12,7 @@ jobs:
       run:
         shell: bash
 
-    # map secrets -> env เพื่อใช้เช็คใน if:
+    # แมป secrets -> env เพื่อใช้ตรวจใน if: (VS Code จะไม่ฟ้อง)
     env:
       DOCKERHUB_USERNAME_ENV: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN_ENV: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -41,7 +41,7 @@ jobs:
           npm ci || true
           npm run build --if-present
 
-      # 3) (Optional) Docker Hub login – กัน 401/Rate limit
+      # 3) (Optional) Docker Hub login – เช็ค env ที่มาจาก secrets
       - name: 3) Docker Hub login
         if: ${{ env.DOCKERHUB_USERNAME_ENV != '' && env.DOCKERHUB_TOKEN_ENV != '' }}
         uses: docker/login-action@v3
@@ -50,46 +50,14 @@ jobs:
           username: ${{ env.DOCKERHUB_USERNAME_ENV }}
           password: ${{ env.DOCKERHUB_TOKEN_ENV }}
 
-      # 4) Write .env from Secrets + validate keys
+      # 4) Write .env from Secrets
       - name: 4) Write .env from Secrets
         run: |
           set -e
           printf "%s" "${{ secrets.ENV_FILE }}" > .env
-
-          echo "---- .env keys ----"
           awk -F= '/^[A-Za-z0-9_]+=/ {print "ENV KEY:", $1}' .env
-          echo "-------------------"
 
-          # ฟังก์ชันอ่านค่าจาก .env ป้องกันกรณีมีช่องว่าง/CRLF
-          getv () { grep -E "^$1=" .env | sed "s/^$1=//" | tr -d '\r'; }
-
-          # เช็กคีย์ MySQL ต้องไม่ว่าง
-          for k in MYSQL_ROOT_PASSWORD MYSQL_DATABASE MYSQL_USER MYSQL_PASSWORD; do
-            val="$(getv "$k")"
-            if [ -z "$val" ]; then
-                echo "❌ $k is empty or missing in .env"
-                exit 1
-            fi
-          done
-
-          # ตั้งค่า PORT ให้มี default ถ้าไม่ได้ใส่มา
-          PORT_VAL="$(getv PORT)"
-          if [ -z "$PORT_VAL" ]; then
-            echo "PORT=4005" >> .env
-            echo "ℹ️ Set default PORT=4005"
-          fi
-
-          # โชว์ความยาวค่าแบบ mask (ไม่เผย secret)
-          for k in MYSQL_ROOT_PASSWORD MYSQL_DATABASE MYSQL_USER MYSQL_PASSWORD PORT; do
-            val="$(getv "$k")"
-            echo "OK $k: length=${#val}"
-          done
-
-          echo "---- docker compose config preview ----"
-          # ดูว่าการแทนค่าตัวแปรใน compose เกิดจริง
-          docker compose --env-file .env config >/dev/null || { echo "compose config failed"; exit 1; }
-
-      # 5) Build & Up (รอจน healthy)
+      # 5) Deploy with Docker Compose 
       - name: 5) docker compose build & up
         run: |
           set -e
@@ -97,44 +65,22 @@ jobs:
           test -f .env
           test -f docker-compose.yml
           docker compose --env-file .env build --pull
-          # --wait จะรอ healthcheck ของ services (ต้องมี healthcheck ใน compose แล้ว)
-          docker compose --env-file .env up -d --remove-orphans --wait --wait-timeout 180
-          docker compose ps
+          docker compose --env-file .env up -d --remove-orphans
           docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"
 
-      # 6) Healthchecks (retry + diagnostics)
-      - name: 6.1) Healthcheck API via nginx (http://127.0.0.1/api/health)
+      # 6) Healthchecks
+      - name: 6.1) Healthcheck API
         run: |
           set -e
-          # ดูว่ามีใครจับ port 80 บนโฮสต์อยู่ไหม
-          (which ss >/dev/null 2>&1 && ss -tlnp | grep ':80' || true)
-          tries=30
-          while [ $tries -gt 0 ]; do
-            code=$(curl -s -o /tmp/api_health.json -w "%{http_code}" http://127.0.0.1/api/health || true)
-            echo "API HTTP $code (tries left: $tries)"
-            if [ "$code" = "200" ]; then
-              cat /tmp/api_health.json 2>/dev/null || true
-              exit 0
-            fi
-            tries=$((tries-1))
-            sleep 3
-          done
-          echo "API unhealthy after retries. Dumping diagnostics..."
-          docker compose ps || true
-          echo "---- nginx logs ----"
-          docker logs --tail=200 telemed-nginx || true
-          echo "---- api logs ----"
-          docker logs --tail=200 telemed-api || true
-          echo "---- mysql logs ----"
-          docker logs --tail=200 telemed-mysql || true
-          echo "---- health states ----"
-          for c in telemed-nginx telemed-api telemed-mysql; do
-            echo "## $c"
-            docker inspect -f '{{json .State.Health}}' "$c" 2>/dev/null || true
-          done
-          exit 1
+          code=$(curl -s -o /tmp/api_health.json -w "%{http_code}" http://127.0.0.1/api/health || true)
+          echo "API HTTP $code"
+          cat /tmp/api_health.json 2>/dev/null || true
+          if [[ "$code" != "200" ]]; then
+            echo "API unhealthy"
+            exit 1
+          fi
 
-      - name: 6.2) Healthcheck Web (/)
+      - name: 6.2) Healthcheck Web
         run: |
           set -e
           code=$(curl -sI -o /dev/null -w "%{http_code}" http://127.0.0.1/ || true)
