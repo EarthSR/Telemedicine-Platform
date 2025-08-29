@@ -20,3 +20,12 @@ mysql -u root -p -e "CREATE DATABASE telemedicinedb CHARACTER SET utf8mb4 COLLAT
 
 # นำเข้า schema + seed
 mysql -u root -p telemedicinedb < telemedicinedb.sql
+
+### 📂 Report/README.md
+```markdown
+# Project Documentation
+## 📑 Iac-mysql
+- [Iac-mysql](Infrastructure.md)  
+## 📑 Reports
+- [Incident Report](incident-report.md)  
+- [Summary Report](summary-report.md)  
